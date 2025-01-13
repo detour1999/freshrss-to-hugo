@@ -237,37 +237,64 @@ def write_markdown_to_repo(filename, markdown_content, repo_path: Path):
 
 def update_opml_file(repo_path):
     """
-    Update or create OPML file with latest feed data.
+    Fetch OPML file from FreshRSS and save it to Hugo static directory.
     
     Args:
-        repo_path (str): Path to the repository root
+        repo_path (Path): Path to the repository root
         
     Returns:
         bool: True if successful, False otherwise
     """
-    opml_path = Path(repo_path) / "myfeeds.opml"
+    base_url = os.getenv("FRESHRSS_URL").rstrip('/')
+    api_user = os.getenv("FRESHRSS_USER")
+    api_key = os.getenv("FRESHRSS_API_KEY")
+
+    # First get the authentication token
+    auth_url = f"{base_url}/api/greader.php/accounts/ClientLogin"
+    auth_data = {
+        "Email": api_user,
+        "Passwd": api_key
+    }
+    auth_response = requests.post(auth_url, data=auth_data)
+    auth_response.raise_for_status()
     
-    # Create basic OPML structure if file doesn't exist
-    if not opml_path.exists():
-        root = ET.Element("opml", version="2.0")
-        head = ET.SubElement(root, "head")
-        ET.SubElement(head, "title").text = "My RSS Feeds"
-        ET.SubElement(head, "dateCreated").text = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
-        ET.SubElement(root, "body")
-        tree = ET.ElementTree(root)
-        tree.write(opml_path, encoding='utf-8', xml_declaration=True)
+    # Extract the Auth token from response
+    auth_token = None
+    for line in auth_response.text.splitlines():
+        if line.startswith('Auth='):
+            auth_token = line[5:]
+            break
     
-    # Update timestamp in existing file
-    tree = ET.parse(opml_path)
-    root = tree.getroot()
-    head = root.find("head")
-    date_modified = head.find("dateModified")
-    if date_modified is None:
-        date_modified = ET.SubElement(head, "dateModified")
-    date_modified.text = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
+    if not auth_token:
+        raise ValueError("Failed to get authentication token")
+
+    # Get OPML file
+    headers = {
+        "Authorization": f"GoogleLogin auth={auth_token}"
+    }
     
-    # Write updated file
-    tree.write(opml_path, encoding='utf-8', xml_declaration=True)
+    opml_url = f"{base_url}/api/greader.php/subscriptions/export"
+    response = requests.get(opml_url, headers=headers)
+    response.raise_for_status()
+    
+    # Ensure static directory exists
+    static_dir = Path(repo_path) / "static"
+    static_dir.mkdir(parents=True, exist_ok=True)
+    
+    opml_path = static_dir / "myfeeds.opml"
+    
+    # Check if content is different before writing
+    if opml_path.exists():
+        with opml_path.open('rb') as f:
+            current_content = f.read()
+            if current_content == response.content:
+                print("OPML file is already up to date")
+                return True
+    
+    # Write new OPML file
+    with opml_path.open('wb') as f:
+        f.write(response.content)
+    
     print(f"Updated {opml_path}")
     return True
 
