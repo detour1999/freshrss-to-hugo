@@ -333,7 +333,8 @@ def main():
     """Main sync process."""
     print("Sync process started.")
     update_opml_file(".")
-    if create_git_branch_and_commit("."):
+    branch_name = f"reading-update-{datetime.now().strftime('%Y%m%d')}"
+    if create_git_branch_and_commit(".", branch_name):
         create_pull_request("owner/repo", branch_name)
 
 if __name__ == "__main__":
