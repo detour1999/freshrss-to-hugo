@@ -5,6 +5,7 @@ from slugify import slugify
 import yaml
 import os
 import openai
+from dotenv import load_dotenv
 from pathlib import Path
 import glob
 import opml
@@ -394,6 +395,22 @@ def create_git_branch_and_commit(repo_path, branch_name=None):
 
 def main():
     """Main sync process."""
+    # Load environment variables
+    load_dotenv()
+    
+    # Verify required environment variables
+    required_vars = [
+        "FRESHRSS_URL",
+        "FRESHRSS_USER",
+        "FRESHRSS_API_KEY",
+        "LLM_API_KEY",
+        "GITHUB_TOKEN"
+    ]
+    
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    if missing_vars:
+        raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+    
     print("Sync process started.")
     
     # Fetch new articles
