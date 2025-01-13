@@ -52,8 +52,20 @@ The following environment variables are required to run the script. Create a `.e
    ```
 3. Edit `.env` and fill in your configuration values
 4. Install required packages:
+   
+   Using uv (recommended):
+   ```bash
+   uv pip install -r requirements.txt
+   ```
+   
+   Or using pip:
    ```bash
    pip install -r requirements.txt
+   ```
+
+   Note: [uv](https://github.com/astral-sh/uv) is a much faster alternative to pip. Install it with:
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
 ## Usage
