@@ -5,6 +5,8 @@ from slugify import slugify
 import yaml
 import os
 import openai
+from pathlib import Path
+import glob
 
 """
 Sync FreshRSS favorites to Hugo posts and update OPML file.
@@ -119,6 +121,62 @@ def generate_markdown(article, llm_summary):
     markdown += article["content"]
     
     return markdown, filename
+
+def _check_duplicate_link(link, content_dir):
+    """
+    Check if an article with the given link already exists.
+    
+    Args:
+        link (str): The article's URL
+        content_dir (Path): Path to content directory
+        
+    Returns:
+        bool: True if duplicate exists, False otherwise
+    """
+    for md_file in content_dir.glob("*.md"):
+        with md_file.open() as f:
+            content = f.read()
+            # Find the YAML front matter between --- markers
+            if content.startswith("---"):
+                front_matter_end = content.find("---", 3)
+                if front_matter_end != -1:
+                    front_matter = yaml.safe_load(content[3:front_matter_end])
+                    if front_matter.get("link") == link:
+                        return True
+    return False
+
+def write_markdown_to_repo(filename, markdown_content, repo_path):
+    """
+    Write markdown content to the repository.
+    
+    Args:
+        filename (str): Name of the markdown file
+        markdown_content (str): The formatted markdown content
+        repo_path (str): Path to the repository root
+        
+    Returns:
+        bool: True if file was written, False if skipped due to duplicate
+    """
+    content_dir = Path(repo_path) / "content" / "reading"
+    
+    # Ensure directory exists
+    content_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Extract link from markdown content for duplicate checking
+    front_matter_end = markdown_content.find("---", 3)
+    front_matter = yaml.safe_load(markdown_content[3:front_matter_end])
+    link = front_matter.get("link")
+    
+    # Check for duplicates
+    if _check_duplicate_link(link, content_dir):
+        print(f"Skipping {filename} - article already exists")
+        return False
+    
+    # Write the file
+    output_path = content_dir / filename
+    output_path.write_text(markdown_content)
+    print(f"Written {filename}")
+    return True
 
 def update_opml_file():
     """
