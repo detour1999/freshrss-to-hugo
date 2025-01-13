@@ -13,6 +13,8 @@ import xml.etree.ElementTree as ET
 import subprocess
 from github import Github
 from github.GithubException import GithubException
+import time
+import re
 
 """
 Sync FreshRSS favorites to Hugo posts and update OPML file.
@@ -220,6 +222,67 @@ def update_opml_file(repo_path):
     print(f"Updated {opml_path}")
     return True
 
+def auto_merge_pr_if_checks_pass(pr_url):
+    """
+    Monitor PR status and auto-merge if all checks pass.
+    
+    Args:
+        pr_url (str): URL of the pull request to monitor
+        
+    Returns:
+        bool: True if merged successfully, False otherwise
+    """
+    github_token = os.getenv("GITHUB_TOKEN")
+    if not github_token:
+        raise ValueError("GITHUB_TOKEN environment variable not set")
+    
+    try:
+        # Extract repo and PR number from URL
+        match = re.match(r"https://github.com/([^/]+/[^/]+)/pull/(\d+)", pr_url)
+        if not match:
+            raise ValueError(f"Invalid PR URL format: {pr_url}")
+        
+        repo_path, pr_number = match.groups()
+        pr_number = int(pr_number)
+        
+        # Initialize GitHub client
+        g = Github(github_token)
+        repo = g.get_repo(repo_path)
+        pr = repo.get_pull(pr_number)
+        
+        # Poll for status checks (max 10 minutes)
+        for _ in range(60):
+            combined_status = repo.get_combined_status(pr.head.sha)
+            checks = list(pr.get_checks())
+            
+            # Check if Netlify deploy is successful
+            netlify_check = next((check for check in checks if 'netlify' in check.name.lower()), None)
+            
+            if combined_status.state == 'success' and \
+               (not netlify_check or netlify_check.conclusion == 'success'):
+                # All checks passed, merge the PR
+                pr.merge(
+                    merge_method='merge',
+                    commit_message="Merging auto-generated reading articles."
+                )
+                print(f"Successfully merged PR {pr_url}")
+                return True
+            
+            if combined_status.state == 'failure' or \
+               (netlify_check and netlify_check.conclusion == 'failure'):
+                print(f"Checks failed for PR {pr_url}, manual review required")
+                return False
+            
+            # Wait 10 seconds before next check
+            time.sleep(10)
+        
+        print(f"Timeout waiting for checks on PR {pr_url}")
+        return False
+        
+    except GithubException as e:
+        print(f"Failed to auto-merge PR: {e}")
+        return False
+
 def create_pull_request(repo_url, branch_name, base_branch="main"):
     """
     Create a GitHub pull request for the new articles.
@@ -335,7 +398,9 @@ def main():
     update_opml_file(".")
     branch_name = f"reading-update-{datetime.now().strftime('%Y%m%d')}"
     if create_git_branch_and_commit(".", branch_name):
-        create_pull_request("owner/repo", branch_name)
+        pr_url = create_pull_request("owner/repo", branch_name)
+        if pr_url:
+            auto_merge_pr_if_checks_pass(pr_url)
 
 if __name__ == "__main__":
     main()
