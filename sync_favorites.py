@@ -23,30 +23,77 @@ Sync FreshRSS favorites to Hugo posts and update OPML file.
 
 def fetch_new_favorites():
     """
-    Retrieve new favorited articles from FreshRSS API.
+    Retrieve new favorited articles from FreshRSS API using Google Reader API compatibility.
     
     Returns:
         list: List of article dictionaries containing metadata
     """
-    # Mock data for development
-    return [
-        {
-            "title": "Understanding Python's Asyncio",
-            "author": "Real Python",
-            "content": "Asyncio is a library to write concurrent code using the async/await syntax...",
-            "link": "https://realpython.com/async-io-python/",
-            "feed_name": "Real Python",
-            "published_date": datetime(2024, 1, 10, 9, 30)
-        },
-        {
-            "title": "The Future of Web Development",
-            "author": "Sarah Smith",
-            "content": "Web development is rapidly evolving with new frameworks and tools...",
-            "link": "https://techblog.com/future-web-dev",
-            "feed_name": "Tech Blog",
-            "published_date": datetime(2024, 1, 12, 15, 45)
+    base_url = os.getenv("FRESHRSS_URL").rstrip('/')
+    api_user = os.getenv("FRESHRSS_USER")
+    api_key = os.getenv("FRESHRSS_API_KEY")
+
+    # First get the authentication token
+    auth_url = f"{base_url}/api/greader.php/accounts/ClientLogin"
+    auth_data = {
+        "Email": api_user,
+        "Passwd": api_key
+    }
+    auth_response = requests.post(auth_url, data=auth_data)
+    auth_response.raise_for_status()
+    
+    # Extract the Auth token from response
+    auth_token = None
+    for line in auth_response.text.splitlines():
+        if line.startswith('Auth='):
+            auth_token = line[5:]
+            break
+    
+    if not auth_token:
+        raise ValueError("Failed to get authentication token")
+
+    # Get starred items
+    headers = {
+        "Authorization": f"GoogleLogin auth={auth_token}"
+    }
+    
+    starred_url = f"{base_url}/api/greader.php/stream/contents/user/-/state/com.google/starred"
+    params = {
+        "n": 50,  # Number of items to fetch
+        "output": "json"
+    }
+    
+    response = requests.get(starred_url, headers=headers, params=params)
+    response.raise_for_status()
+    data = response.json()
+    
+    articles = []
+    for item in data.get('items', []):
+        # Extract author from different possible locations
+        author = None
+        if 'author' in item:
+            author = item['author']
+        elif 'origin' in item and 'title' in item['origin']:
+            author = item['origin']['title']
+        
+        # Parse the published date
+        published_date = datetime.fromtimestamp(item['published'])
+        
+        # Extract content from different possible locations
+        content = item.get('content', {}).get('content', '')
+        if not content and 'summary' in item:
+            content = item['summary'].get('content', '')
+        
+        article = {
+            "title": item.get('title', 'Untitled'),
+            "author": author or 'Unknown',
+            "content": content,
+            "link": item.get('alternate', [{'href': None}])[0]['href'],
+            "feed_name": item.get('origin', {}).get('title', 'Unknown Feed'),
+            "published_date": published_date
         }
-    ]
+        articles.append(article)
+    
+    return articles
 
 def call_llm_for_summary(article_content):
     """
