@@ -10,6 +10,7 @@ import glob
 import opml
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
+import subprocess
 
 """
 Sync FreshRSS favorites to Hugo posts and update OPML file.
@@ -217,20 +218,76 @@ def update_opml_file(repo_path):
     print(f"Updated {opml_path}")
     return True
 
-def create_git_branch_and_commit():
+def create_git_branch_and_commit(repo_path, branch_name=None):
     """
-    Create a new git branch, commit changes, and prepare PR.
+    Create a new git branch, commit changes, and push to remote.
     
+    Args:
+        repo_path (str): Path to the repository root
+        branch_name (str, optional): Name for the new branch
+        
     Returns:
         bool: True if successful, False otherwise
     """
-    # TODO: Implement git operations
-    return True
+    repo_path = Path(repo_path)
+    
+    # Check if there are any changes to commit
+    result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=repo_path,
+        capture_output=True,
+        text=True
+    )
+    
+    if not result.stdout.strip():
+        print("No changes to commit")
+        return False
+    
+    # Generate branch name if not provided
+    if branch_name is None:
+        branch_name = f"reading-update-{datetime.now().strftime('%Y%m%d')}"
+    
+    try:
+        # Create and checkout new branch
+        subprocess.run(
+            ["git", "checkout", "-b", branch_name],
+            cwd=repo_path,
+            check=True
+        )
+        
+        # Stage changes
+        subprocess.run(
+            ["git", "add", "content/reading/*", "myfeeds.opml"],
+            cwd=repo_path,
+            check=True
+        )
+        
+        # Commit changes
+        subprocess.run(
+            ["git", "commit", "-m", "Add new reading articles"],
+            cwd=repo_path,
+            check=True
+        )
+        
+        # Push to remote
+        subprocess.run(
+            ["git", "push", "origin", branch_name],
+            cwd=repo_path,
+            check=True
+        )
+        
+        print(f"Changes committed and pushed to branch: {branch_name}")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"Git operation failed: {e}")
+        return False
 
 def main():
     """Main sync process."""
     print("Sync process started.")
     update_opml_file(".")
+    create_git_branch_and_commit(".")
 
 if __name__ == "__main__":
     main()
