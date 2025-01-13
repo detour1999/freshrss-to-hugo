@@ -3,6 +3,8 @@
 from datetime import datetime
 from slugify import slugify
 import yaml
+import os
+import openai
 
 """
 Sync FreshRSS favorites to Hugo posts and update OPML file.
@@ -34,6 +36,53 @@ def fetch_new_favorites():
             "published_date": datetime(2024, 1, 12, 15, 45)
         }
     ]
+
+def call_llm_for_summary(article_content):
+    """
+    Generate article summary and metadata using OpenAI API.
+    
+    Args:
+        article_content (str): The full article content
+        
+    Returns:
+        dict: Contains summary, tags, and categories
+    """
+    # Initialize OpenAI client
+    api_key = os.getenv("LLM_API_KEY")
+    if not api_key:
+        raise ValueError("LLM_API_KEY environment variable not set")
+    
+    client = openai.OpenAI(api_key=api_key)
+    
+    # Prepare the prompt
+    prompt = f"""Analyze this article and provide:
+1. A concise summary (2-3 sentences)
+2. 3-5 relevant tags
+3. 1-2 broad categories
+
+Article content:
+{article_content}
+
+Respond in this exact JSON format:
+{{
+    "summary": "your summary here",
+    "tags": ["tag1", "tag2", "tag3"],
+    "categories": ["category1", "category2"]
+}}"""
+
+    # Call the API
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant that analyzes articles and provides structured summaries."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.7,
+        response_format={ "type": "json_object" }
+    )
+    
+    # Parse and return the response
+    return response.choices[0].message.content
 
 def generate_markdown(article, llm_summary):
     """
