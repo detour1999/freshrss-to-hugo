@@ -7,6 +7,9 @@ import os
 import openai
 from pathlib import Path
 import glob
+import opml
+from datetime import datetime, timezone
+import xml.etree.ElementTree as ET
 
 """
 Sync FreshRSS favorites to Hugo posts and update OPML file.
@@ -178,14 +181,40 @@ def write_markdown_to_repo(filename, markdown_content, repo_path):
     print(f"Written {filename}")
     return True
 
-def update_opml_file():
+def update_opml_file(repo_path):
     """
-    Regenerate OPML file from current feed subscriptions.
+    Update or create OPML file with latest feed data.
     
+    Args:
+        repo_path (str): Path to the repository root
+        
     Returns:
         bool: True if successful, False otherwise
     """
-    # TODO: Implement OPML file generation
+    opml_path = Path(repo_path) / "myfeeds.opml"
+    
+    # Create basic OPML structure if file doesn't exist
+    if not opml_path.exists():
+        root = ET.Element("opml", version="2.0")
+        head = ET.SubElement(root, "head")
+        ET.SubElement(head, "title").text = "My RSS Feeds"
+        ET.SubElement(head, "dateCreated").text = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
+        ET.SubElement(root, "body")
+        tree = ET.ElementTree(root)
+        tree.write(opml_path, encoding='utf-8', xml_declaration=True)
+    
+    # Update timestamp in existing file
+    tree = ET.parse(opml_path)
+    root = tree.getroot()
+    head = root.find("head")
+    date_modified = head.find("dateModified")
+    if date_modified is None:
+        date_modified = ET.SubElement(head, "dateModified")
+    date_modified.text = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S %z")
+    
+    # Write updated file
+    tree.write(opml_path, encoding='utf-8', xml_declaration=True)
+    print(f"Updated {opml_path}")
     return True
 
 def create_git_branch_and_commit():
@@ -201,6 +230,7 @@ def create_git_branch_and_commit():
 def main():
     """Main sync process."""
     print("Sync process started.")
+    update_opml_file(".")
 
 if __name__ == "__main__":
     main()
