@@ -11,6 +11,8 @@ import opml
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 import subprocess
+from github import Github
+from github.GithubException import GithubException
 
 """
 Sync FreshRSS favorites to Hugo posts and update OPML file.
@@ -218,6 +220,50 @@ def update_opml_file(repo_path):
     print(f"Updated {opml_path}")
     return True
 
+def create_pull_request(repo_url, branch_name, base_branch="main"):
+    """
+    Create a GitHub pull request for the new articles.
+    
+    Args:
+        repo_url (str): GitHub repository URL (e.g., "owner/repo")
+        branch_name (str): Name of the branch to create PR from
+        base_branch (str): Target branch for the PR
+        
+    Returns:
+        str: URL of the created pull request, or None if failed
+    """
+    github_token = os.getenv("GITHUB_TOKEN")
+    if not github_token:
+        raise ValueError("GITHUB_TOKEN environment variable not set")
+    
+    try:
+        # Initialize GitHub client
+        g = Github(github_token)
+        repo = g.get_repo(repo_url)
+        
+        # Check if PR already exists
+        existing_prs = repo.get_pulls(state='open', 
+                                    head=f"{repo.owner.login}:{branch_name}", 
+                                    base=base_branch)
+        if existing_prs.totalCount > 0:
+            print(f"PR already exists for branch {branch_name}")
+            return existing_prs[0].html_url
+        
+        # Create new PR
+        pr_title = f"New Reading Articles - {datetime.now().strftime('%Y-%m-%d')}"
+        pr_body = "Automatically generated reading articles."
+        pr = repo.create_pull(title=pr_title,
+                            body=pr_body,
+                            head=branch_name,
+                            base=base_branch)
+        
+        print(f"Created PR: {pr.html_url}")
+        return pr.html_url
+        
+    except GithubException as e:
+        print(f"Failed to create PR: {e}")
+        return None
+
 def create_git_branch_and_commit(repo_path, branch_name=None):
     """
     Create a new git branch, commit changes, and push to remote.
@@ -287,7 +333,8 @@ def main():
     """Main sync process."""
     print("Sync process started.")
     update_opml_file(".")
-    create_git_branch_and_commit(".")
+    if create_git_branch_and_commit("."):
+        create_pull_request("owner/repo", branch_name)
 
 if __name__ == "__main__":
     main()
