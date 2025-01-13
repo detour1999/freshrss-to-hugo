@@ -154,19 +154,19 @@ def _check_duplicate_link(link, content_dir):
                         return True
     return False
 
-def write_markdown_to_repo(filename, markdown_content, repo_path):
+def write_markdown_to_repo(filename, markdown_content, repo_path: Path):
     """
     Write markdown content to the repository.
     
     Args:
         filename (str): Name of the markdown file
         markdown_content (str): The formatted markdown content
-        repo_path (str): Path to the repository root
+        repo_path (Path): Path to the repository root
         
     Returns:
         bool: True if file was written, False if skipped due to duplicate
     """
-    content_dir = Path(repo_path) / "content" / "reading"
+    content_dir = repo_path / "content" / "reading"
     
     # Ensure directory exists
     content_dir.mkdir(parents=True, exist_ok=True)
@@ -478,7 +478,7 @@ def main():
             markdown_content, filename = generate_markdown(article, llm_result)
             
             # Write to repo
-            if write_markdown_to_repo(filename, markdown_content, "."):
+            if write_markdown_to_repo(filename, markdown_content, repo_path):
                 new_articles_added = True
                 
         except Exception as e:
@@ -486,7 +486,7 @@ def main():
             continue
     
     # Update OPML file
-    update_opml_file(".")
+    update_opml_file(repo_path)
     
     # Create PR if new articles were added
     if new_articles_added:
