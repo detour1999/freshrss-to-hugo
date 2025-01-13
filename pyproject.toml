@@ -1,0 +1,7 @@
+[project]
+name = "freshrss-to-hugo"
+version = "0.1.0"
+description = "RSS Feed to Hugo Blog Sync"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
