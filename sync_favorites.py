@@ -328,6 +328,49 @@ def create_pull_request(repo_url, branch_name, base_branch="main"):
         print(f"Failed to create PR: {e}")
         return None
 
+def ensure_hugo_repo():
+    """
+    Ensure Hugo repository is checked out and up to date.
+    
+    Returns:
+        Path: Path to the Hugo repository
+    """
+    repo_name = os.getenv("REPO_NAME")
+    if not repo_name:
+        raise ValueError("REPO_NAME environment variable not set")
+    
+    repo_path = Path(".hugo_repo")
+    
+    try:
+        if not repo_path.exists():
+            # Clone the repository
+            subprocess.run(
+                ["git", "clone", f"https://github.com/{repo_name}.git", str(repo_path)],
+                check=True
+            )
+        else:
+            # Update existing repository
+            subprocess.run(
+                ["git", "fetch", "origin"],
+                cwd=repo_path,
+                check=True
+            )
+            subprocess.run(
+                ["git", "checkout", "main"],
+                cwd=repo_path,
+                check=True
+            )
+            subprocess.run(
+                ["git", "pull", "origin", "main"],
+                cwd=repo_path,
+                check=True
+            )
+        
+        return repo_path
+        
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Failed to setup Hugo repository: {e}")
+
 def create_git_branch_and_commit(repo_path, branch_name=None):
     """
     Create a new git branch, commit changes, and push to remote.
@@ -404,7 +447,8 @@ def main():
         "FRESHRSS_USER",
         "FRESHRSS_API_KEY",
         "LLM_API_KEY",
-        "GITHUB_TOKEN"
+        "GITHUB_TOKEN",
+        "REPO_NAME"
     ]
     
     missing_vars = [var for var in required_vars if not os.getenv(var)]
@@ -412,6 +456,9 @@ def main():
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
     
     print("Sync process started.")
+    
+    # Ensure Hugo repository is ready
+    repo_path = ensure_hugo_repo()
     
     # Fetch new articles
     articles = fetch_new_favorites()
@@ -444,8 +491,8 @@ def main():
     # Create PR if new articles were added
     if new_articles_added:
         branch_name = f"reading-update-{datetime.now().strftime('%Y%m%d')}"
-        if create_git_branch_and_commit(".", branch_name):
-            pr_url = create_pull_request("owner/repo", branch_name)
+        if create_git_branch_and_commit(repo_path, branch_name):
+            pr_url = create_pull_request(os.getenv("REPO_NAME"), branch_name)
             if pr_url:
                 auto_merge_pr_if_checks_pass(pr_url)
                 print("Successfully processed new articles and created PR")

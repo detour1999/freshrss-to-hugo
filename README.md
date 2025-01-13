@@ -39,6 +39,10 @@ The following environment variables are required to run the script. Create a `.e
     3. Select scopes: `repo` (full control of private repositories)
     4. Generate and copy the token
 
+- `REPO_NAME`: GitHub repository name in format "owner/repo-name"
+  - Example: `johndoe/my-hugo-blog`
+  - This is the repository where your Hugo blog is hosted
+
 ## Setup
 
 1. Clone this repository
