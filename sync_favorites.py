@@ -5,6 +5,7 @@ from slugify import slugify
 import yaml
 import os
 import openai
+import requests
 from dotenv import load_dotenv
 from pathlib import Path
 import glob
