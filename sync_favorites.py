@@ -395,12 +395,45 @@ def create_git_branch_and_commit(repo_path, branch_name=None):
 def main():
     """Main sync process."""
     print("Sync process started.")
+    
+    # Fetch new articles
+    articles = fetch_new_favorites()
+    if not articles:
+        print("No new articles found.")
+        return
+    
+    new_articles_added = False
+    
+    # Process each article
+    for article in articles:
+        try:
+            # Generate summary using LLM
+            llm_result = call_llm_for_summary(article["content"])
+            
+            # Generate markdown
+            markdown_content, filename = generate_markdown(article, llm_result)
+            
+            # Write to repo
+            if write_markdown_to_repo(filename, markdown_content, "."):
+                new_articles_added = True
+                
+        except Exception as e:
+            print(f"Error processing article '{article.get('title', 'Unknown')}': {e}")
+            continue
+    
+    # Update OPML file
     update_opml_file(".")
-    branch_name = f"reading-update-{datetime.now().strftime('%Y%m%d')}"
-    if create_git_branch_and_commit(".", branch_name):
-        pr_url = create_pull_request("owner/repo", branch_name)
-        if pr_url:
-            auto_merge_pr_if_checks_pass(pr_url)
+    
+    # Create PR if new articles were added
+    if new_articles_added:
+        branch_name = f"reading-update-{datetime.now().strftime('%Y%m%d')}"
+        if create_git_branch_and_commit(".", branch_name):
+            pr_url = create_pull_request("owner/repo", branch_name)
+            if pr_url:
+                auto_merge_pr_if_checks_pass(pr_url)
+                print("Successfully processed new articles and created PR")
+    
+    print("Sync process completed successfully")
 
 if __name__ == "__main__":
     main()
