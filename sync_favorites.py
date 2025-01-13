@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 from datetime import datetime
+from slugify import slugify
+import yaml
 
 """
 Sync FreshRSS favorites to Hugo posts and update OPML file.
@@ -39,13 +41,35 @@ def generate_markdown(article, llm_summary):
     
     Args:
         article (dict): Article metadata from FreshRSS
-        llm_summary (str): AI-generated summary of the article
+        llm_summary (dict): AI-generated summary and metadata
         
     Returns:
-        str: Hugo-formatted Markdown content
+        tuple: (markdown_content, filename)
     """
-    # TODO: Implement Markdown generation with frontmatter
-    return ""
+    # Prepare front matter
+    front_matter = {
+        "title": article["title"],
+        "author": article["author"],
+        "link": article["link"],
+        "source": article["feed_name"],
+        "summary": llm_summary["summary"],
+        "tags": llm_summary.get("tags", ["uncategorized"]),
+        "categories": llm_summary.get("categories", ["general"]),
+        "date": article["published_date"].strftime("%Y-%m-%d")
+    }
+    
+    # Generate filename
+    date_prefix = article["published_date"].strftime("%Y-%m-%d")
+    slug = slugify(article["title"])
+    filename = f"{date_prefix}-{slug}.md"
+    
+    # Create markdown content
+    markdown = "---\n"
+    markdown += yaml.dump(front_matter, allow_unicode=True, sort_keys=False)
+    markdown += "---\n\n"
+    markdown += article["content"]
+    
+    return markdown, filename
 
 def update_opml_file():
     """
