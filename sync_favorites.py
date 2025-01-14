@@ -65,10 +65,12 @@ def fetch_new_favorites():
         "Authorization": f"GoogleLogin auth={auth_token}"
     }
 
+    # Construct URL for starred items
     starred_url = f"{base_url}/api/greader.php/stream/contents/user/-/state/com.google/starred"
     params = {
-        "n": 50,  # Number of items to fetch
-        "output": "json"
+        "n": "50",  # Number of items to fetch as string
+        "output": "json",
+        "xt": "user/-/state/com.google/read"  # Exclude read items
     }
 
     response = requests.get(starred_url, headers=headers, params=params)
