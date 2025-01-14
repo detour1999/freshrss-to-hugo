@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 from datetime import datetime
 from slugify import slugify
 import yaml
@@ -496,68 +497,131 @@ def create_git_branch_and_commit(repo_path, branch_name=None):
         print(f"Git operation failed: {e}")
         return False
 
-def main():
-    """Main sync process."""
-    # Load environment variables
-    load_dotenv()
-
-    # Verify required environment variables
-    required_vars = [
-        "FRESHRSS_URL",
-        "FRESHRSS_USER",
-        "FRESHRSS_API_KEY",
-        "LLM_API_KEY",
-        "GITHUB_TOKEN",
-        "REPO_NAME"
-    ]
-
+def verify_env_vars(required_vars):
+    """Verify all required environment variables are set."""
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     if missing_vars:
         raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
 
-    print("Sync process started.")
-
-    # Ensure Hugo repository is ready
-    repo_path = ensure_hugo_repo()
-
-    # Fetch new articles
+def show_favorites(count=5):
+    """Display recent favorites without processing them."""
     articles = fetch_new_favorites()
     if not articles:
-        print("No new articles found.")
+        print("No articles found.")
         return
 
-    new_articles_added = False
+    print(f"\nShowing {min(count, len(articles))} recent favorites:\n")
+    for i, article in enumerate(articles[:count], 1):
+        print(f"{i}. {article['title']}")
+        print(f"   Author: {article['author']}")
+        print(f"   Feed: {article['feed_name']}")
+        print(f"   Published: {article['published_date']}")
+        print(f"   Link: {article['link']}\n")
 
-    # Process each article
-    for article in articles:
-        try:
-            # Generate summary using LLM
-            llm_result = call_llm_for_summary(article["content"])
+def test_llm():
+    """Test LLM summary generation with a sample article."""
+    sample_content = """
+    This is a test article about Python programming.
+    Python is a versatile programming language used in web development,
+    data science, and automation. Its clean syntax and extensive library
+    ecosystem make it popular among developers.
+    """
+    try:
+        summary = call_llm_for_summary(sample_content)
+        print("\nLLM Test Results:")
+        print(yaml.dump(summary, allow_unicode=True))
+    except Exception as e:
+        print(f"LLM test failed: {e}")
 
-            # Generate markdown
-            markdown_content, filename = generate_markdown(article, llm_result)
+def main():
+    """Main sync process."""
+    parser = argparse.ArgumentParser(description="Sync FreshRSS favorites to Hugo")
+    parser.add_argument('--show-favorites', type=int, nargs='?', const=5, metavar='N',
+                      help='Show N recent favorites (default: 5)')
+    parser.add_argument('--test-llm', action='store_true',
+                      help='Test LLM summary generation')
+    parser.add_argument('--sync', action='store_true',
+                      help='Run full sync process')
+    args = parser.parse_args()
 
-            # Write to repo
-            if write_markdown_to_repo(filename, markdown_content, repo_path):
-                new_articles_added = True
+    # Load environment variables
+    load_dotenv()
 
-        except Exception as e:
-            print(f"Error processing article '{article.get('title', 'Unknown')}': {e}")
-            continue
+    try:
+        if args.show_favorites:
+            # Only need FreshRSS vars
+            verify_env_vars(["FRESHRSS_URL", "FRESHRSS_USER", "FRESHRSS_API_KEY"])
+            show_favorites(args.show_favorites)
+            return
 
-    # Update OPML file
-    update_opml_file(repo_path)
+        if args.test_llm:
+            # Only need LLM vars
+            verify_env_vars(["LLM_API_KEY"])
+            test_llm()
+            return
 
-    # Create PR if new articles were added
-    if new_articles_added:
-        branch_name = f"reading-update-{datetime.now().strftime('%Y%m%d')}"
-        if create_git_branch_and_commit(repo_path, branch_name):
-            pr_url = create_pull_request(os.getenv("REPO_NAME"), branch_name)
-            if pr_url:
-                auto_merge_pr_if_checks_pass(pr_url)
-                print("Successfully processed new articles and created PR")
+        if args.sync:
+            # Need all vars for full sync
+            verify_env_vars([
+                "FRESHRSS_URL",
+                "FRESHRSS_USER",
+                "FRESHRSS_API_KEY",
+                "LLM_API_KEY",
+                "GITHUB_TOKEN",
+                "REPO_NAME"
+            ])
 
-    print("Sync process completed successfully")
+            print("Sync process started.")
+
+            # Ensure Hugo repository is ready
+            repo_path = ensure_hugo_repo()
+
+            # Fetch new articles
+            articles = fetch_new_favorites()
+            if not articles:
+                print("No new articles found.")
+                return
+
+            new_articles_added = False
+
+            # Process each article
+            for article in articles:
+                try:
+                    # Generate summary using LLM
+                    llm_result = call_llm_for_summary(article["content"])
+
+                    # Generate markdown
+                    markdown_content, filename = generate_markdown(article, llm_result)
+
+                    # Write to repo
+                    if write_markdown_to_repo(filename, markdown_content, repo_path):
+                        new_articles_added = True
+
+                except Exception as e:
+                    print(f"Error processing article '{article.get('title', 'Unknown')}': {e}")
+                    continue
+
+            # Update OPML file
+            update_opml_file(repo_path)
+
+            # Create PR if new articles were added
+            if new_articles_added:
+                branch_name = f"reading-update-{datetime.now().strftime('%Y%m%d')}"
+                if create_git_branch_and_commit(repo_path, branch_name):
+                    pr_url = create_pull_request(os.getenv("REPO_NAME"), branch_name)
+                    if pr_url:
+                        auto_merge_pr_if_checks_pass(pr_url)
+                        print("Successfully processed new articles and created PR")
+
+            print("Sync process completed successfully")
+            return
+
+        # If no arguments provided, show help
+        parser.print_help()
+
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
 
 if __name__ == "__main__":
     main()
