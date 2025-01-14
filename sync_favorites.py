@@ -535,7 +535,10 @@ def test_llm():
 
 def main():
     """Main sync process."""
-    parser = argparse.ArgumentParser(description="Sync FreshRSS favorites to Hugo")
+    parser = argparse.ArgumentParser(
+        description="Sync FreshRSS favorites to Hugo",
+        epilog="Example: uv run sync_favorites.py --show-favorites 5"
+    )
     parser.add_argument('--show-favorites', type=int, nargs='?', const=5, metavar='N',
                       help='Show N recent favorites (default: 5)')
     parser.add_argument('--test-llm', action='store_true',
