@@ -4,4 +4,13 @@ version = "0.1.0"
 description = "RSS Feed to Hugo Blog Sync"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "openai>=1.59.7",
+    "opml>=0.5",
+    "pygithub>=2.5.0",
+    "python-dotenv>=1.0.1",
+    "python-slugify>=8.0.4",
+    "pyyaml>=6.0.2",
+    "requests>=2.32.3",
+    "typing-extensions>=4.12.2",
+]
